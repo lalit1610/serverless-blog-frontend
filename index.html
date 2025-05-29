@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Serverless Blog on AWS</title>
+</head>
+<body>
+  <h1>My Serverless Blog</h1>
+  <div id="posts"></div>
+
+  <h2>Add New Post</h2>
+  <form id="postForm">
+    <input type="text" id="title" placeholder="Title" required><br>
+    <textarea id="content" placeholder="Content" required></textarea><br>
+    <input type="text" id="author" placeholder="Author"><br>
+    <button type="submit">Post</button>
+  </form>
+
+  <script>
+    const apiUrl = 'https://xyz.execute-api.region.amazonaws.com/prod/posts'; // replace with your API Gateway URL
+
+    async function fetchPosts() {
+      const res = await fetch(apiUrl);
+      const data = await res.json();
+      const postsDiv = document.getElementById('posts');
+      postsDiv.innerHTML = '';
+      data.forEach(post => {
+        const el = document.createElement('div');
+        el.innerHTML = `<h3>${post.title}</h3><p>${post.content}</p><p><em>By ${post.author || 'Anonymous'}</em></p><hr>`;
+        postsDiv.appendChild(el);
+      });
+    }
+
+    async function addPost(event) {
+      event.preventDefault();
+      const title = document.getElementById('title').value;
+      const content = document.getElementById('content').value;
+      const author = document.getElementById('author').value || 'Anonymous';
+
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ title, content, author, datePosted: new Date().toISOString() })
+      });
+
+      if (res.ok) {
+        document.getElementById('postForm').reset();
+        fetchPosts();
+      } else {
+        alert('Failed to add post');
+      }
+    }
+
+    document.getElementById('postForm').addEventListener('submit', addPost);
+    fetchPosts();
+  </script>
+</body>
+</html>
