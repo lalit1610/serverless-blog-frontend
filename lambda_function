@@ -1,0 +1,65 @@
+import json
+import boto3
+import uuid
+from boto3.dynamodb.conditions import Key
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('BlogPosts')
+
+def lambda_handler(event, context):
+    method = event['httpMethod']
+    
+    if method == 'GET':
+        # Get all posts or specific post by ID
+        params = event.get('queryStringParameters') or {}
+        postId = params.get('postId')
+        if postId:
+            response = table.get_item(Key={'postId': postId})
+            item = response.get('Item')
+            if item:
+                return {'statusCode': 200, 'body': json.dumps(item)}
+            else:
+                return {'statusCode': 404, 'body': json.dumps({'message': 'Post not found'})}
+        else:
+            # Scan to get all posts (simple, not scalable for prod)
+            response = table.scan()
+            return {'statusCode': 200, 'body': json.dumps(response['Items'])}
+    
+    elif method == 'POST':
+        data = json.loads(event['body'])
+        new_post = {
+            'postId': str(uuid.uuid4()),
+            'title': data['title'],
+            'content': data['content'],
+            'author': data.get('author', 'Anonymous'),
+            'datePosted': data.get('datePosted', '')
+        }
+        table.put_item(Item=new_post)
+        return {'statusCode': 201, 'body': json.dumps(new_post)}
+    
+    elif method == 'PUT':
+        data = json.loads(event['body'])
+        postId = data['postId']
+        # Update item
+        table.update_item(
+            Key={'postId': postId},
+            UpdateExpression="set title=:t, content=:c, author=:a, datePosted=:d",
+            ExpressionAttributeValues={
+                ':t': data['title'],
+                ':c': data['content'],
+                ':a': data['author'],
+                ':d': data['datePosted']
+            }
+        )
+        return {'statusCode': 200, 'body': json.dumps({'message': 'Post updated'})}
+    
+    elif method == 'DELETE':
+        params = event.get('queryStringParameters') or {}
+        postId = params.get('postId')
+        if not postId:
+            return {'statusCode': 400, 'body': json.dumps({'message': 'postId required'})}
+        table.delete_item(Key={'postId': postId})
+        return {'statusCode': 200, 'body': json.dumps({'message': 'Post deleted'})}
+    
+    else:
+        return {'statusCode': 405, 'body': json.dumps({'message': 'Method not allowed'})}
