@@ -1,57 +1,212 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Serverless Blog on AWS</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simple Serverless Blog</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background-color: #f8f9fa;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      color: #007acc;
+    }
+    #posts {
+      margin-bottom: 40px;
+    }
+    .post {
+      background: #fff;
+      padding: 20px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .post h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .post p {
+      white-space: pre-wrap;
+    }
+    form {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    form input[type="text"],
+    form textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+      resize: vertical;
+    }
+    form textarea {
+      height: 100px;
+    }
+    form button {
+      background-color: #007acc;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    form button:hover {
+      background-color: #005fa3;
+    }
+    .error, .success {
+      margin-bottom: 15px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+  </style>
 </head>
 <body>
-  <h1>My Serverless Blog</h1>
-  <div id="posts"></div>
 
-  <h2>Add New Post</h2>
+  <h1>Simple Serverless Blog</h1>
+
+  <div id="status"></div>
+
+  <div id="posts">
+    <p>Loading posts...</p>
+  </div>
+
   <form id="postForm">
-    <input type="text" id="title" placeholder="Title" required><br>
-    <textarea id="content" placeholder="Content" required></textarea><br>
-    <input type="text" id="author" placeholder="Author"><br>
-    <button type="submit">Post</button>
+    <h2>Add a New Post</h2>
+    <label for="title">Title:</label>
+    <input type="text" id="title" name="title" required placeholder="Enter post title" />
+
+    <label for="content">Content:</label>
+    <textarea id="content" name="content" required placeholder="Write your post content"></textarea>
+
+    <label for="author">Author:</label>
+    <input type="text" id="author" name="author" placeholder="Your name (optional)" />
+
+    <button type="submit">Publish Post</button>
   </form>
 
   <script>
-    const apiUrl = 'https://9c4plbkz3a.execute-api.us-east-2.amazonaws.com/prod/posts'; // replace with your API Gateway URL
+    const apiUrl = "https://9c4plbkz3a.execute-api.us-east-2.amazonaws.com/prod/posts"; // <-- Replace this with your actual API Gateway invoke URL (including resource path)
 
-    async function fetchPosts() {
-      const res = await fetch(apiUrl);
-      const data = await res.json();
-      const postsDiv = document.getElementById('posts');
-      postsDiv.innerHTML = '';
-      data.forEach(post => {
-        const el = document.createElement('div');
-        el.innerHTML = `<h3>${post.title}</h3><p>${post.content}</p><p><em>By ${post.author || 'Anonymous'}</em></p><hr>`;
-        postsDiv.appendChild(el);
-      });
+    const postsContainer = document.getElementById('posts');
+    const postForm = document.getElementById('postForm');
+    const statusElem = document.getElementById('status');
+
+    // Helper functions to show messages
+    function showStatus(message, isError = false) {
+      statusElem.textContent = message;
+      statusElem.className = isError ? 'error' : 'success';
+      setTimeout(() => {
+        statusElem.textContent = '';
+        statusElem.className = '';
+      }, 4000);
     }
 
-    async function addPost(event) {
-      event.preventDefault();
-      const title = document.getElementById('title').value;
-      const content = document.getElementById('content').value;
-      const author = document.getElementById('author').value || 'Anonymous';
+    // Fetch and display posts
+    async function fetchPosts() {
+      postsContainer.innerHTML = '<p>Loading posts...</p>';
+      try {
+        const response = await fetch(apiUrl, { method: 'GET' });
+        if (!response.ok) throw new Error('Failed to load posts');
 
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ title, content, author, datePosted: new Date().toISOString() })
-      });
+        const posts = await response.json();
 
-      if (res.ok) {
-        document.getElementById('postForm').reset();
-        fetchPosts();
-      } else {
-        alert('Failed to add post');
+        if (!posts || posts.length === 0) {
+          postsContainer.innerHTML = '<p>No posts yet.</p>';
+          return;
+        }
+
+        postsContainer.innerHTML = '';
+        posts.forEach(post => {
+          const div = document.createElement('div');
+          div.className = 'post';
+          div.innerHTML = `
+            <h3>${escapeHtml(post.title)}</h3>
+            <p>${escapeHtml(post.content)}</p>
+            <small>By ${escapeHtml(post.author || 'Anonymous')}</small>
+          `;
+          postsContainer.appendChild(div);
+        });
+
+      } catch (error) {
+        postsContainer.innerHTML = `<p class="error">Error loading posts: ${error.message}</p>`;
       }
     }
 
-    document.getElementById('postForm').addEventListener('submit', addPost);
+    // Submit new post
+    postForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const title = postForm.title.value.trim();
+      const content = postForm.content.value.trim();
+      const author = postForm.author.value.trim() || 'Anonymous';
+
+      if (!title || !content) {
+        showStatus('Title and content are required.', true);
+        return;
+      }
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            title,
+            content,
+            author,
+            datePosted: new Date().toISOString()
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Failed to publish post');
+        }
+
+        showStatus('Post published successfully!');
+        postForm.reset();
+        fetchPosts();
+
+      } catch (err) {
+        showStatus('Error: ' + err.message, true);
+      }
+    });
+
+    // Basic HTML escaping to avoid injection
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+
+    // Initial load
     fetchPosts();
   </script>
+
 </body>
 </html>
